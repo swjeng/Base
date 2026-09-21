@@ -1,6 +1,7 @@
 ﻿using Base.Enums;
 using Base.Models;
 using Base.Services;
+using Mongo.Models;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Newtonsoft.Json.Linq;
@@ -16,8 +17,34 @@ namespace Mongo.Services
     {
         private MongoClient? _client;
         private IMongoDatabase? _db;
-        private IMongoCollection<BsonDocument>? _collection;
+        //private IMongoCollection<BsonDocument>? _collection;
+        private string _table = "";
         private bool _isOk = false;
+
+        //db str in config file
+        private readonly string _dbStr = "";
+
+        public MgoCrudSvc(string dbStr = "")
+        {
+            _dbStr = dbStr;
+        }
+
+        /// <summary>
+        /// 依 table 名稱取得(或重新取得)collection，table 改變時會重新指向新的 collection。
+        /// </summary>
+        private IMongoCollection<BsonDocument>? GetCollection(string table)
+        {
+            if (_collection != null && _table == table) return;
+
+            if (_client == null)
+            {
+                var mongoUrl = new MongoUrl(_dbStr);
+                _client = new MongoClient(mongoUrl);
+                _db = _client.GetDatabase(mongoUrl.DatabaseName);
+            }
+            _collection = _db!.GetCollection<BsonDocument>(table);
+            _table = table;
+        }
 
         /// <summary>
         /// get page rows for dataTables
@@ -26,7 +53,7 @@ namespace Mongo.Services
         /// <param name="dtDto"></param>
         /// <param name="ctrl"></param>
         /// <returns></returns>
-        public async Task<JObject?> GetPageA(ReadDto readDto, DtDto dtDto, string ctrl = "")
+        public async Task<JObject?> GetPageA(MgoReadDto readDto, DtDto dtDto, string ctrl = "")
         {
             var easyDto = _Model.Copy<DtDto, EasyDtDto>(dtDto);
             if (string.IsNullOrEmpty(dtDto.sort) && dtDto.order != null && dtDto.order.Count > 0)
@@ -41,10 +68,12 @@ namespace Mongo.Services
         /// <summary>
         /// 依照查詢條件取得 MongoDB 分頁資料。
         /// </summary>
-        public async Task<JObject?> GetPageA(ReadDto readDto, EasyDtDto dtDto, string ctrl = "")
+        public async Task<JObject?> GetPageA(MgoReadDto readDto, EasyDtDto dtDto, string ctrl = "")
         {
-            if (string.IsNullOrWhiteSpace(readDto.ReadSql) || _collection == null)
+            if (string.IsNullOrWhiteSpace(readDto.Table))
                 return null;
+
+            GetCollection(readDto.Table);
 
             dtDto.length = Math.Max(0, dtDto.length);
             dtDto.start = Math.Max(0, dtDto.start);
@@ -56,7 +85,7 @@ namespace Mongo.Services
 
             var rowCount = dtDto.recordsFiltered;
             if (rowCount < 0)
-                rowCount = (int)await _collection.CountDocumentsAsync(filter);
+                rowCount = (int)await _collection!.CountDocumentsAsync(filter);
 
             var find = _collection.Find(filter);
             if (!string.IsNullOrWhiteSpace(dtDto.sort) && dtDto.sort.Length > 1)
@@ -85,9 +114,10 @@ namespace Mongo.Services
 
         public void Dispose()
         {
-            _collection = null;
+            //_collection = null;
             _db = null;
             _client = null;
+            //_table = "";
             //DbStr = string.Empty;
             //DbName = string.Empty;
             //CollectName = string.Empty;

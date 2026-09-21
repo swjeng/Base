@@ -1,10 +1,7 @@
-﻿using Base.Enums;
-using Base.Models;
-using Base.Services;
+﻿using Base.Services;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization;
 using MongoDB.Driver;
-using Newtonsoft.Json.Linq;
 
 namespace Mongo.Services
 {
